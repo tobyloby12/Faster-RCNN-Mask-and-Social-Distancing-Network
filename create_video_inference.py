@@ -52,7 +52,7 @@ while True:
 
 for frame in frames:
     predicted, bird, combined = detection_image_cv2(frame, model, cfg)
-    filenames_mask, size_mask = predict_and_save(predicted, 'predicted', number_of_frames, filenames_mask)
+    filenames_mask, size_mask = predict_and_save(predicted, 'masks', number_of_frames, filenames_mask)
     filenames_bird, size_bird = predict_and_save(bird, 'bird', number_of_frames, filenames_bird)
     filenames_combined, size_combined = predict_and_save(combined, 'combined', number_of_frames, filenames_combined)
     number_of_frames += 1
