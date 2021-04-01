@@ -395,5 +395,5 @@ model.load_weights(model_path, by_name=True)
 # cv2.imwrite('test_street_bird.jpg', birds_image)
 # cv2.waitKey(0)
 
-mAP, precision, recall = evaluate_model(test_set, model, cfg)
-print(mAP, precision, recall)
+# mAP, precision, recall = evaluate_model(test_set, model, cfg)
+# print(mAP, precision, recall)
