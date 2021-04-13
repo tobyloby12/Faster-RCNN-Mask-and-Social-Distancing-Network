@@ -1,6 +1,7 @@
 from os import listdir
 import os
 import tensorflow as tf
+import pandas as pd
 from xml.etree import ElementTree
 from numpy import zeros
 from numpy import asarray
@@ -21,17 +22,13 @@ from social_distancing import *
 
 class MaskDataset(Dataset):
     # load the dataset definitions
-    def load_dataset(self, dataset_dir, is_train=True):
+    def load_dataset(self, dataset_dir, is_train=True, prefix = ''):
         # define one class
         self.add_class("dataset", 1, "with_mask")
         self.add_class("dataset", 2, "without_mask")
         self.add_class("dataset", 3, "mask_weared_incorrect")
-        self.add_class("dataset", 4, "person")
-        self.add_class("dataset", 5, "person-like")
-        self.add_class("dataset", 6, "nonhuman")
-        # define data locations
-        images_dir = dataset_dir + '/images/'
-        annotations_dir = dataset_dir + '/annotations/'
+        images_dir = dataset_dir + f'/{prefix}images/'
+        annotations_dir = dataset_dir + f'/{prefix}annotations/'
         # find all images
         for filename in listdir(images_dir):
             # extract image id
@@ -88,11 +85,8 @@ class MaskDataset(Dataset):
         info = self.image_info[image_id]
         return info['path']
 
-# train set
-train_set = MaskDataset()
-train_set.load_dataset('masks-dataset\\train', is_train=True)
-train_set.prepare()
-print('Train: %d' % len(train_set.image_ids))
+
+
 
 # test/val set
 test_set = MaskDataset()
@@ -105,23 +99,24 @@ print('Test: %d' % len(test_set.image_ids))
 class MasksConfig(Config):
     # define the name of the configuration
     NAME = "mask_cfg"
-    EPOCHS = 10
-    NUM_CLASSES = 1 + 6
+    EPOCHS = 1
+    NUM_CLASSES = 1 + 3
     # number of training steps per epoch
     STEPS_PER_EPOCH = 131
     IMAGES_PER_GPU = 1
     BATCH_SIZE = 1
 
+
 # define the prediction configuration
 class PredictionConfig(Config):
-	# define the name of the configuration
-	NAME = "mask_cfg"
-	# number of classes (background + kangaroo)
-	NUM_CLASSES = 1 + 3
-	# simplify GPU config
-	GPU_COUNT = 1
-	IMAGES_PER_GPU = 1
-	# BATCH_SIZE = 597
+    # define the name of the configuration
+    NAME = "mask_cfg"
+    # number of classes (background + kangaroo)
+    NUM_CLASSES = 1 + 3
+    # simplify GPU config
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
+    # BATCH_SIZE = 597
 
 # calculate the mAP for a model on a given dataset
 def evaluate_model(dataset, model, cfg):
@@ -129,6 +124,9 @@ def evaluate_model(dataset, model, cfg):
     Recalls = list()
     Precisions = list()
     for image_id in dataset.image_ids:
+        if image_id == 470:
+            break
+    # for image_id in dataset.image_ids:
         # load image, bounding boxes and masks for the image id
         image, image_meta, gt_class_id, gt_bbox, gt_mask = load_image_gt(dataset, cfg, image_id, use_mini_mask=False)
         # convert pixel values (e.g. center)
@@ -144,63 +142,68 @@ def evaluate_model(dataset, model, cfg):
         # store
         APs.append(AP)
         # computing bounding boxes for misclassification
-        Recalls.append(recall)
-        Precisions.append(precision)
+        Recalls.append(recall[1])
+        Precisions.append(precision[1])
         print(image_id)
     # calculate the mean AP across all images
     mAP = mean(APs)
     mean_recall = mean(Recalls)
     mean_precision = mean(Precisions)
-    return mAP, mean_recall, mean_precision
+    return mAP, mean_precision, mean_recall
 
 # plot a number of photos with ground truth and predictions
 def plot_actual_vs_predicted(dataset, model, cfg, n_images=5):
     # load image and mask
     for i in range(n_images):
         # load the image and mask
-        image = dataset.load_image(i)
-        mask, _ = dataset.load_mask(i)
+        image = dataset.load_image(25)
+        mask, _ = dataset.load_mask(25)
         # convert pixel values (e.g. center)
         scaled_image = mold_image(image, cfg)
         # convert image into one sample
         sample = expand_dims(scaled_image, 0)
         # make prediction
         yhat = model.detect(sample, verbose=0)[0]
-        # # define subplot
-        # plt.subplot(n_images, 2, i*2+1)
-        # # plot raw pixel data
-        # plt.imshow(image)
-        # plt.title('Actual')
-        # # plot masks
-        # for j in range(mask.shape[2]):
-        #     plt.imshow(mask[:, :, j], cmap='gray', alpha=0.3)
-        # # get the context for drawing boxes
-        # plt.subplot(n_images, 2, i*2+2)
+        # define subplot
+        plt.subplot(n_images, 2, i*2+1)
+        # plot raw pixel data
+        plt.imshow(image)
+        plt.title('Actual')
+        # plot masks
+        for j in range(mask.shape[2]):
+            plt.imshow(mask[:, :, j], cmap='gray', alpha=0.3)
+        # get the context for drawing boxes
+        plt.subplot(n_images, 2, i*2+2)
         # plot raw pixel data
         plt.imshow(image)
         plt.title('Predicted')
         ax = plt.gca()
         # plot each box
         for box in range(len(yhat['rois'])):
-            # get coordinates
-            y1, x1, y2, x2 = yhat['rois'][box]
-            # calculate width and height of the box
-            width, height = x2 - x1, y2 - y1
-            # create the shape
-            rect = Rectangle((x1, y1), width, height, fill=False, color='red')
             classes_dict = {1:'Wearing Mask',
                         2: 'No mask',
                         3: 'Incorrect Mask Wearing',
                         4: 'person',
                         5: 'person-like',
                         6: 'nonhuman'}
-            t = plt.text(x1, y1, classes_dict[yhat['class_ids'][box]])
-            t.set_bbox(dict(facecolor='red', alpha=1, edgecolor='red'))
+            # get coordinates
+            y1, x1, y2, x2 = yhat['rois'][box]
+            # calculate width and height of the box
+            width, height = x2 - x1, y2 - y1
+            # create the shape
+            if classes_dict[yhat['class_ids'][box]] == 'Wearing Mask':
+                rect = Rectangle((x1, y1), width, height, fill=False, color='green')
+            else:
+                rect = Rectangle((x1, y1), width, height, fill=False, color='red')
+            
+            # t = plt.text(x1, y1, classes_dict[yhat['class_ids'][box]])
+            # t.set_bbox(dict(facecolor='red', alpha=1, edgecolor='red'))
             # draw the box
             ax.add_patch(rect)
     # show the figure
     plt.show()
 
+# plots the image being detected using matplotlib
 def detection_image_matplotlib(image, model, cfg):
     # load the image and mask
     # image = dataset.load_image(i)
@@ -235,6 +238,7 @@ def detection_image_matplotlib(image, model, cfg):
         ax.add_patch(rect)
         plt.show()
 
+# using open cv to plot the output for object detection
 def detection_image_cv2(image, model, cfg):
     # convert pixel values (e.g. center)
     scaled_image = mold_image(image, cfg)
@@ -271,14 +275,9 @@ def detection_image_cv2(image, model, cfg):
     perspective_image, added = full_social_distancing(image, points, 100)
     return image, perspective_image, added
 
-def performance_metrics(dataset, model, cfg):
-    for image_id in dataset.image_ids:
-        image = dataset.load_image(image_id)
-        mask_true, class_id_true = dataset.load_mask(image_id)
-        print(mask_true)
 
-
-# # TRAINING
+###################################################
+# # TRAINING this section can be uncommented to train the model. The cfg will need to be edited to configure.
 # config = MasksConfig()
 # config.display()
 # # define the model
@@ -286,7 +285,25 @@ def performance_metrics(dataset, model, cfg):
 # # load weights (mscoco) and exclude the output layers
 # model.load_weights('mask_rcnn_coco.h5', by_name=True, exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",  "mrcnn_bbox", "mrcnn_mask"])
 # # train weights (output layers or 'heads')
-# model.train(train_set, test_set, learning_rate=config.LEARNING_RATE, epochs=50, layers='heads')
+# model.train(train_set, test_set, learning_rate=config.LEARNING_RATE, epochs=1, layers='heads')
+###################################################
+
+# cfg = PredictionConfig()
+# print(cfg)
+# model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
+# model_path = 'anchor ratio double\\mask_rcnn_mask_cfg_0001.h5'
+# model.load_weights(model_path, by_name=True)
+# data_test = evaluate_model(test_set, model, cfg)
+# print(data_test)
+
+
+
+
+
+
+
+
+
 
 # # MAP SCORES
 # # create config
@@ -304,14 +321,16 @@ def performance_metrics(dataset, model, cfg):
 # print("Test mAP: %.3f" % test_mAP)
 # print(os.getcwd())
 
-# # PREDICTING TEST AND TRAIN IMAGES
+# # # PREDICTING TEST AND TRAIN IMAGES
 # # create config
 # cfg = PredictionConfig()
 # # define the model
 # model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
 # # load model weights
-# model_path = 'mask_cfg20210323T1504\\mask_rcnn_mask_cfg_0025.h5'
+# model_path = 'heads+warped\\mask_rcnn_mask_cfg_0025.h5'
 # model.load_weights(model_path, by_name=True)
+
+# plot_actual_vs_predicted(train_set, model, cfg, n_images=1)
 # # plot predictions for train dataset
 # plot_actual_vs_predicted(train_set, model, cfg)
 # # # plot predictions for test dataset
@@ -346,11 +365,11 @@ def performance_metrics(dataset, model, cfg):
 # cap.release()
 # cv2.destroyAllWindows()
 
-# # using video
-cfg = PredictionConfig()
-model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
-model_path = 'final_train\\mask_rcnn_mask_cfg_0025.h5'
-model.load_weights(model_path, by_name=True)
+# using video
+# cfg = PredictionConfig()
+# model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
+# model_path = 'heads + no warped\\mask_rcnn_mask_cfg_0025.h5'
+# model.load_weights(model_path, by_name=True)
 
 # capture = cv2.VideoCapture('videos/street2.mp4')
 # number_of_frames = 0
@@ -395,5 +414,28 @@ model.load_weights(model_path, by_name=True)
 # cv2.imwrite('test_street_bird.jpg', birds_image)
 # cv2.waitKey(0)
 
-# mAP, precision, recall = evaluate_model(test_set, model, cfg)
-# print(mAP, precision, recall)
+# cfg = PredictionConfig()
+# model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
+# model_path = 'heads + no warped\\mask_rcnn_mask_cfg_0025.h5'
+# model.load_weights(model_path, by_name=True)
+
+
+# data_train = evaluate_model(train_set, model, cfg)
+# print(data_train)
+# data_test= evaluate_model(test_set, model, cfg)
+# print(data_test)
+
+# data = np.concatenate(data_train, data_test)
+
+# df = pd.DataFrame(data, columns=['Train mAP', 'Train Precision', 'Train Recall', 'Test mAP', 'Test Precision', 'Test Recall'])
+
+
+
+
+# cfg = PredictionConfig()
+# print(cfg)
+# model = MaskRCNN(mode='inference', model_dir='./', config=cfg)
+# model_path = 'anchor double\\mask_rcnn_mask_cfg_0001.h5'
+# model.load_weights(model_path, by_name=True)
+# data_test = evaluate_model(test_set, model, cfg)
+# print(data_test)

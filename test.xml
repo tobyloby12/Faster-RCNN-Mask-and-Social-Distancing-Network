@@ -1,0 +1,3 @@
+<annotation><folder>masks-dataset\train\aug1_images\</folder><filename>masks-dataset\train\aug1_images\aug1_maksssksksss226.png</filename><size><width>0    400
+Name: width, dtype: int64</width><height>0    225
+Name: height, dtype: int64</height><depth>3</depth></size><segmented>0</segmented><object><name>with_mask</name><pose>Unspecified</pose><truncated>0</truncated><occluded>0</occluded><difficult>0</difficult><bndbox><xmin>145</xmin><ymin>56</ymin><xmax>209</xmax><ymax>121</ymax></bndbox></object></annotation>>

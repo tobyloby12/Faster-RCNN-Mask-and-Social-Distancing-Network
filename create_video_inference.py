@@ -1,6 +1,7 @@
 from network_again import *
 import os
 
+# finding correct directory
 directory = os.getcwd()
 print(directory)
 exists = False
@@ -23,6 +24,8 @@ frames = list()
 filenames_mask = list()
 filenames_bird = list()
 filenames_combined = list()
+
+# functions to predict images and write videos
 
 def predict_and_save(image, path, frame, filenames_type):
     image_path = os.path.join(os.getcwd(), f'videos\\{path}')
