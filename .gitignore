@@ -7,7 +7,7 @@ temp/
 test/
 images/
 *.mp4
-
+*.jpg
 
 
 # Byte-compiled / optimized / DLL files
