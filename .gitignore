@@ -6,6 +6,8 @@ results/
 temp/
 test/
 images/
+*.mp4
+
 
 
 # Byte-compiled / optimized / DLL files
